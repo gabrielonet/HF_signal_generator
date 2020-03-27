@@ -1,32 +1,22 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
-
-
-
 #define W_CLK 8   // Pin 8 - connect to AD9850 module word load clock pin (CLK)
 #define FQ_UD 9   // Pin 9 - connect to freq update pin (FQ)
 #define DATA 10   // Pin 10 - connect to serial data load pin (DATA)
 #define RESET 11  // Pin 11 - connect to reset pin (RST) 
 #define pulseHigh(pin) {digitalWrite(pin, HIGH); digitalWrite(pin, LOW); }
-
-double frecventa = 7010000;
+#define OLED_RESET 4
+double frecventa = 14000000;
 static byte PinA = 0 ;
 static byte PinB = 0 ;  
-
-
-#define OLED_RESET 4
+int time_a;
 Adafruit_SSD1306 display(OLED_RESET);
 
 void setup(void) {
-  Serial.begin(9600) ;
-  //digitalWrite (20, HIGH);   //  Encoder intrerupt pin 2
-  //digitalWrite (21, HIGH);   //  Encoder intrerupt pin 3 
+  pinMode(2,INPUT_PULLUP);
+  pinMode(3,INPUT_PULLUP);
   attachInterrupt (digitalPinToInterrupt(2), encoder, CHANGE);   
   attachInterrupt (digitalPinToInterrupt(3), encoder, CHANGE);  
-//  attachInterrupt (5, sw_press, CHANGE);   // pin 18
-
-
-    
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   pinMode(FQ_UD, OUTPUT);
   pinMode(W_CLK, OUTPUT);
@@ -35,66 +25,55 @@ void setup(void) {
   pulseHigh(RESET);
   pulseHigh(W_CLK);
   pulseHigh(FQ_UD);  // this pulse enables serial mode on the AD9850 - Datasheet page 12.
-//sendFrequency(7010000);
- oled(frecventa);
- sendFrequency(frecventa);
-
+  //sendFrequency(7010000);
+  oled(frecventa);
+  ad9850(frecventa);
 }
-
 
 
 // frequency calc from datasheet page 8 = <sys clock> * <frequency tuning word>/2^32
-void sendFrequency(double frequency) {  
+void ad9850(double frequency) {  
   int32_t freq = frequency  * 4294967295/125000000;  // note 125 MHz clock on 9850.  You can make 'slight' tuning variations here by adjusting the clock frequency.
-  for (int b=0; b<4; b++, freq>>=8) {
-    tfr_byte(freq & 0xFF);
-    //Serial.println(freq);
+  for (int b_it = 0; b_it < 4; b_it++, freq>>=8) {
+    ad9850_serial_send(freq & 0xFF);
   }
-  
-  tfr_byte(0x000);   // Final control byte, all 0 for 9850 chip
+  ad9850_serial_send(0x000);   // Final control byte, all 0 for 9850 chip
   pulseHigh(FQ_UD);  // Done!  Should see output
 }
-// transfers a byte, a bit at a time, LSB first to the 9850 via serial DATA line
-void tfr_byte(byte data)
+void ad9850_serial_send(byte data)
 {
   for (int i=0; i<8; i++, data>>=1) {
     digitalWrite(DATA, data & 0x01);
-    pulseHigh(W_CLK);   //after each bit sent, CLK is pulsed high
+    pulseHigh(W_CLK);
   }
 }
 
-
 void encoder (){
+  time_a = millis();
   byte newPinA = digitalRead (2); byte newPinB = digitalRead (3);
-  if (PinA == 1 && PinB == 1 )
-  {
-   if (newPinA == HIGH && newPinB == LOW ) { frecventa-= 50; }
-   if (newPinA == LOW && newPinB == HIGH ) { frecventa += 50; }  
+  if (PinA == 0 && PinB == 0 ){
+    if (newPinA == HIGH && newPinB == LOW ) { frecventa += 25; }
+    if (newPinA == LOW && newPinB == HIGH ) { frecventa -= 25; }  
   }  
-  PinA = newPinA;  PinB = newPinB;
-  //Serial.println(frecventa);
-  
-  //oled(frecventa) ;
-  sendFrequency(frecventa);
-
+PinA = newPinA;  PinB = newPinB;
+  int time_b = millis();
+  ad9850(frecventa);
 }  
 
-
-
 void oled (long text){
-display.clearDisplay ();
-display.setCursor (10,5);
-display.setTextSize (2);
-display.setTextColor (WHITE);
-display.print (text);
-display.print("Hz");
-display.display ();
+  display.clearDisplay ();
+  display.setCursor (10,5);
+  display.setTextSize (2);
+  display.setTextColor (WHITE);
+  display.print (text);
+  display.display ();
 }
 
-
-
-
-
-
 void loop() {
+  int  time_b=millis();
+  // insert a small delay between rotary encoder and i2c display to avoid shared intrerupt pins conflict  (Arduino nano)
+  if (time_b - time_a > 0.1) {
+    oled(frecventa) ;
+    time_a = time_b;
+  }
 }
