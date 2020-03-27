@@ -10,11 +10,15 @@ double frecventa = 14000000;
 static byte PinA = 0 ;
 static byte PinB = 0 ;  
 int time_a;
+double res = 10;
+int res_temp = 0 ;
+int cursor = 83 ;
 Adafruit_SSD1306 display(OLED_RESET);
 
 void setup(void) {
   pinMode(2,INPUT_PULLUP);
   pinMode(3,INPUT_PULLUP);
+  pinMode(4,INPUT_PULLUP);
   attachInterrupt (digitalPinToInterrupt(2), encoder, CHANGE);   
   attachInterrupt (digitalPinToInterrupt(3), encoder, CHANGE);  
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -52,8 +56,8 @@ void encoder (){
   time_a = millis();
   byte newPinA = digitalRead (2); byte newPinB = digitalRead (3);
   if (PinA == 0 && PinB == 0 ){
-    if (newPinA == HIGH && newPinB == LOW ) { frecventa += 25; }
-    if (newPinA == LOW && newPinB == HIGH ) { frecventa -= 25; }  
+    if (newPinA == HIGH && newPinB == LOW ) { frecventa += res; }
+    if (newPinA == LOW && newPinB == HIGH ) { frecventa -= res; }  
   }  
 PinA = newPinA;  PinB = newPinB;
   int time_b = millis();
@@ -62,12 +66,26 @@ PinA = newPinA;  PinB = newPinB;
 
 void oled (long text){
   display.clearDisplay ();
-  display.setCursor (10,5);
+  display.setCursor (10,0);
   display.setTextSize (2);
   display.setTextColor (WHITE);
   display.print (text);
+  display.setCursor (cursor,22);
+  display.print ("^");
   display.display ();
 }
+
+void rezolution() {
+  res *= 10 ;
+  if (res  < 10 ){res = 1000000;}
+  if (res > 1000000){res = 10 ;}
+  if (res == 10 ) {cursor = 83 ;}
+  if (res == 100 ) {cursor = 70;}
+  if (res == 1000 ) {cursor = 58;}
+  if (res == 10000 ) {cursor = 46;}
+  if (res == 100000 ) {cursor = 34;}
+  if (res == 1000000 ) {cursor = 22;}
+  }
 
 void loop() {
   int  time_b=millis();
@@ -76,4 +94,10 @@ void loop() {
     oled(frecventa) ;
     time_a = time_b;
   }
+
+if (digitalRead(4) == LOW  && res_temp == 0 ) {res_temp = 1; rezolution() ;} 
+if (digitalRead(4) == HIGH && res_temp == 1 ) {res_temp = 0 ;} 
+
+
+
 }
